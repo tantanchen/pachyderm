@@ -5,8 +5,8 @@ steps:
 - name: my-build
   image: golang:latest
   commands:
-  - go get github.com/mfridman/tparse
-  - go test  -mod=vendor -v ./src/server/pfs/server -timeout 3600s -json | tparse -all
+#  - go get github.com/mfridman/tparse #| tparse -all
+  - go test  -mod=vendor -v ./src/server/pfs/server/server_test.go -timeout 3600s -json
 
 services:
 - name: etcd
