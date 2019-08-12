@@ -11,4 +11,4 @@ services:
 - name: etcd
   image: quay.io/coreos/etcd:v3.3.5
   ports:
-  - 2379
+  - 2379:32379
