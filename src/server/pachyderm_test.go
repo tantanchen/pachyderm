@@ -10178,7 +10178,7 @@ var etcdClient *etcd.Client
 var getEtcdClientOnce sync.Once
 
 const (
-	etcdAddress = "localhost:32379" // etcd must already be serving at this address
+	etcdAddress = "localhost:2379" // etcd must already be serving at this address
 )
 
 func getEtcdClient(t testing.TB) *etcd.Client {
