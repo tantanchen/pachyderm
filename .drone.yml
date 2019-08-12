@@ -1,4 +1,5 @@
 kind: pipeline
+name: build
 
 steps:
 - name: my-build
