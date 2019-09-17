@@ -5,9 +5,6 @@ services:
   alias: etcd
   command: ["etcd", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://0.0.0.0:2379"]
 
-#variables:
-#  ALLOW_NONE_AUTHENTICATION: "yes"
-
 stages:
   - test
 
