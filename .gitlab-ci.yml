@@ -4,8 +4,8 @@ services:
 - name: quay.io/coreos/etcd:v3.3.5
   command: ["etcd", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://0.0.0.0:2379"]
 
-variables:
-  ALLOW_NONE_AUTHENTICATION: "yes"
+#variables:
+#  ALLOW_NONE_AUTHENTICATION: "yes"
 
 unit_tests:
   script: go test -mod=vendor -v -timeout 60s ./src/server/pfs/server  | grep -v "$(date +^%FT)"

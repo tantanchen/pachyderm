@@ -31,7 +31,7 @@ import (
 const (
 	testingTreeCacheSize       = 8
 	etcdHost                   = "localhost"
-	etcdPort                   = "32379"
+	etcdPort                   = "2379"
 	localBlockServerCacheBytes = 256 * 1024 * 1024
 )
 
