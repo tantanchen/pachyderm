@@ -1,7 +1,7 @@
 image: golang:1.13
 
 services:
-- name: bitnami/etcd
+- name: quay.io/coreos/etcd:v3.3.5
   command: ["etcd", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://0.0.0.0:2379"]
 
 variables:
