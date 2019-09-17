@@ -3,8 +3,9 @@ image: golang:1.9
 services:
 - name: bitnami/etcd
   command: ["etcd", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://0.0.0.0:2379"]
-  variables:
-    ALLOW_NONE_AUTHENTICATION=yes
+
+variables:
+  ALLOW_NONE_AUTHENTICATION: "yes"
 
 unit_tests:
   script: go test -v ./src/server/pfs/server -timeout 60 | grep -v "$(date +^%FT)"
