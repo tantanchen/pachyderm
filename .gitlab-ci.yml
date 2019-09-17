@@ -8,4 +8,4 @@ variables:
   ALLOW_NONE_AUTHENTICATION: "yes"
 
 unit_tests:
-  script: go test -mod=vendor -v -timeout 60 ./src/server/pfs/server  | grep -v "$(date +^%FT)"
+  script: go test -mod=vendor -v -timeout 60s ./src/server/pfs/server  | grep -v "$(date +^%FT)"
