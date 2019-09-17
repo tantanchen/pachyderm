@@ -2,13 +2,19 @@ image: golang:1.13
 
 services:
 - name: quay.io/coreos/etcd:v3.3.5
+  alias: etcd
   command: ["etcd", "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://0.0.0.0:2379"]
 
 #variables:
 #  ALLOW_NONE_AUTHENTICATION: "yes"
 
+stages:
+  - test
+
 check_etcd:
-  script: curl http://localhost:2379/health
+  stage: test
+  script: curl -f http://etcd:2379/health
 
 unit_tests:
+  stage: test
   script: go test -mod=vendor -v -timeout 10s ./src/server/pfs/server  | grep -v "$(date +^%FT)"
