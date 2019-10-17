@@ -4,6 +4,8 @@ set -ex
 
 echo 'DOCKER_OPTS="-H unix:///var/run/docker.sock -s devicemapper"' | tee /etc/default/docker > /dev/null
 
+KIND_CACHE_PATH="~/cached-deps/kind-$KIND_VERSION"
+
 # Install jq and ag
 sudo apt-get update -y
 sudo apt-get install jq silversearcher-ag
@@ -19,10 +21,17 @@ chown root:$USER /etc/fuse.conf
 # To get the latest kubectl version:
 # curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt
 if [ ! -f ~/cached-deps/kubectl ] ; then
-    KUBECTL_VERSION=v1.13.0
-    curl -L -o kubectl https://storage.googleapis.com/kubernetes-release/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl && \
+    curl -L -o kubectl https://storage.googleapis.com/kubernetes-release/release/1.15.3/bin/linux/amd64/kubectl && \
         chmod +x ./kubectl && \
         mv ./kubectl ~/cached-deps/kubectl
+fi
+
+# Install KinD (Kubernetes in Docker)
+if [ ! -f "${KIND_CACHE_PATH}" ]; then
+    echo '>>> Downloading Kind'
+    curl -sL "https://github.com/kubernetes-sigs/kind/releases/download/v0.5.1/kind-linux-amd64" -o kind && \
+    chmod +x ./kind &&
+    mv ./kind ~/cached-deps/kind
 fi
 
 # Install minikube

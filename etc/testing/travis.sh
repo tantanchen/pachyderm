@@ -19,34 +19,11 @@ mkdir -p ~/.cache/go-build
 sudo chown -R `whoami` ~/.cache/go-build
 sudo chown -R `whoami` ~/cached-deps
 
-kubectl version --client
 etcdctl --version
 
-minikube delete || true  # In case we get a recycled machine
-make launch-kube
-sleep 5
-
-# Wait until a connection with kubernetes has been established
-echo "Waiting for connection to kubernetes..."
-max_t=90
-WHEEL='\|/-';
-until {
-  minikube status 2>&1 >/dev/null
-  kubectl version 2>&1 >/dev/null
-}; do
-    if ((max_t-- <= 0)); then
-        echo "Could not connect to minikube"
-        echo "minikube status --alsologtostderr --loglevel=0 -v9:"
-        echo "==================================================="
-        minikube status --alsologtostderr --loglevel=0 -v9
-        exit 1
-    fi
-    echo -en "\e[G$${WHEEL:0:1}";
-    WHEEL="$${WHEEL:1}$${WHEEL:0:1}";
-    sleep 1;
-done
-minikube status
-kubectl version
+kind create cluster --name pach-cluster --wait 5m
+export KUBECONFIG="$(kind --name="pach-cluster" get kubeconfig-path)"
+kubectl get pods --all-namespaces
 
 echo "Running test suite based on BUCKET=$BUCKET"
 
