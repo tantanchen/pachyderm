@@ -142,6 +142,8 @@ type clientSettings struct {
 	gzipCompress         bool
 	dialTimeout          time.Duration
 	caCerts              *x509.CertPool
+	unaryInterceptors    []grpc.UnaryClientInterceptor
+	streamInterceptors   []grpc.StreamClientInterceptor
 }
 
 // NewFromAddress constructs a new APIClient for the server at addr.
@@ -151,14 +153,18 @@ func NewFromAddress(addr string, options ...Option) (*APIClient, error) {
 		return nil, errors.Errorf("address shouldn't contain protocol (\"://\"), but is: %q", addr)
 	}
 	// Apply creation options
-	settings := clientSettings{
+	settings := &clientSettings{
 		maxConcurrentStreams: DefaultMaxConcurrentStreams,
 		dialTimeout:          DefaultDialTimeout,
 	}
 	for _, option := range options {
-		if err := option(&settings); err != nil {
+		if err := option(settings); err != nil {
 			return nil, err
 		}
+	}
+	if tracing.IsActive() {
+		settings.unaryInterceptors = append(settings.unaryInterceptors, tracing.UnaryClientInterceptor())
+		settings.streamInterceptors = append(settings.streamInterceptors, tracing.StreamClientInterceptor())
 	}
 	c := &APIClient{
 		addr:         addr,
@@ -166,9 +172,43 @@ func NewFromAddress(addr string, options ...Option) (*APIClient, error) {
 		limiter:      limit.New(settings.maxConcurrentStreams),
 		gzipCompress: settings.gzipCompress,
 	}
-	if err := c.connect(settings.dialTimeout); err != nil {
+
+	dialOptions := DefaultDialOptions()
+	if c.caCerts == nil {
+		dialOptions = append(dialOptions, grpc.WithInsecure())
+	} else {
+		tlsCreds := credentials.NewClientTLSFromCert(c.caCerts, "")
+		dialOptions = append(dialOptions, grpc.WithTransportCredentials(tlsCreds))
+	}
+	if c.gzipCompress {
+		dialOptions = append(dialOptions, grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")))
+	}
+	if len(settings.unaryInterceptors) > 0 {
+		dialOptions = append(dialOptions, grpc.WithChainUnaryInterceptor(settings.unaryInterceptors...))
+	}
+	if len(settings.streamInterceptors) > 0 {
+		dialOptions = append(dialOptions, grpc.WithChainStreamInterceptor(settings.streamInterceptors...))
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), settings.dialTimeout)
+	defer cancel()
+	if !strings.HasPrefix(addr, "dns:///") {
+		addr = "dns:///" + c.addr
+	}
+	clientConn, err := grpc.DialContext(ctx, addr, dialOptions...)
+	if err != nil {
 		return nil, err
 	}
+	c.PfsAPIClient = pfs.NewAPIClient(clientConn)
+	c.PpsAPIClient = pps.NewAPIClient(clientConn)
+	c.ObjectAPIClient = pfs.NewObjectAPIClient(clientConn)
+	c.AuthAPIClient = auth.NewAPIClient(clientConn)
+	c.Enterprise = enterprise.NewAPIClient(clientConn)
+	c.VersionAPIClient = versionpb.NewAPIClient(clientConn)
+	c.AdminAPIClient = admin.NewAPIClient(clientConn)
+	c.TransactionAPIClient = transaction.NewAPIClient(clientConn)
+	c.DebugClient = debug.NewDebugClient(clientConn)
+	c.clientConn = clientConn
+	c.healthClient = health.NewHealthClient(clientConn)
 	return c, nil
 }
 
@@ -261,6 +301,34 @@ func WithAdditionalPachdCert() Option {
 			}
 			return addCertFromFile(settings.caCerts, path.Join(tls.VolumePath, tls.CertFile))
 		}
+		return nil
+	}
+}
+
+// WithAdditionalUnaryClientInterceptors instructs the New* functions to add the provided
+// UnaryClientInterceptors to the gRPC dial options when opening a client connection.  Internally,
+// all of the provided options are coalesced into one chain, so it is safe to provide this option
+// more than once.
+//
+// This client creates both Unary and Stream client connections, so you will probably want to supply
+// a corresponding WithAdditionalStreamClientInterceptors call.
+func WithAdditionalUnaryClientInterceptors(interceptors ...grpc.UnaryClientInterceptor) Option {
+	return func(settings *clientSettings) error {
+		settings.unaryInterceptors = append(settings.unaryInterceptors, interceptors...)
+		return nil
+	}
+}
+
+// WithAdditionalStreamClientInterceptors instructs the New* functions to add the provided
+// StreamClientInterceptors to the gRPC dial options when opening a client connection.  Internally,
+// all of the provided options are coalesced into one chain, so it is safe to provide this option
+// more than once.
+//
+// This client creates both Unary and Stream client connections, so you will probably want to supply
+// a corresponding WithAdditionalUnaryClientInterceptors option.
+func WithAdditionalStreamClientInterceptors(interceptors ...grpc.StreamClientInterceptor) Option {
+	return func(settings *clientSettings) error {
+		settings.streamInterceptors = append(settings.streamInterceptors, interceptors...)
 		return nil
 	}
 }
@@ -587,47 +655,6 @@ func DefaultDialOptions() []grpc.DialOption {
 			grpc.MaxCallSendMsgSize(grpcutil.MaxMsgSize),
 		),
 	}
-}
-
-func (c *APIClient) connect(timeout time.Duration) error {
-	dialOptions := DefaultDialOptions()
-	if c.caCerts == nil {
-		dialOptions = append(dialOptions, grpc.WithInsecure())
-	} else {
-		tlsCreds := credentials.NewClientTLSFromCert(c.caCerts, "")
-		dialOptions = append(dialOptions, grpc.WithTransportCredentials(tlsCreds))
-	}
-	if tracing.IsActive() {
-		dialOptions = append(dialOptions,
-			grpc.WithUnaryInterceptor(tracing.UnaryClientInterceptor()),
-			grpc.WithStreamInterceptor(tracing.StreamClientInterceptor()),
-		)
-	}
-	if c.gzipCompress {
-		dialOptions = append(dialOptions, grpc.WithDefaultCallOptions(grpc.UseCompressor("gzip")))
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	addr := c.addr
-	if !strings.HasPrefix(addr, "dns:///") {
-		addr = "dns:///" + c.addr
-	}
-	clientConn, err := grpc.DialContext(ctx, addr, dialOptions...)
-	if err != nil {
-		return err
-	}
-	c.PfsAPIClient = pfs.NewAPIClient(clientConn)
-	c.PpsAPIClient = pps.NewAPIClient(clientConn)
-	c.ObjectAPIClient = pfs.NewObjectAPIClient(clientConn)
-	c.AuthAPIClient = auth.NewAPIClient(clientConn)
-	c.Enterprise = enterprise.NewAPIClient(clientConn)
-	c.VersionAPIClient = versionpb.NewAPIClient(clientConn)
-	c.AdminAPIClient = admin.NewAPIClient(clientConn)
-	c.TransactionAPIClient = transaction.NewAPIClient(clientConn)
-	c.DebugClient = debug.NewDebugClient(clientConn)
-	c.clientConn = clientConn
-	c.healthClient = health.NewHealthClient(clientConn)
-	return nil
 }
 
 // AddMetadata adds necessary metadata (including authentication credentials)
