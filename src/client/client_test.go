@@ -73,5 +73,4 @@ func TestInterceptors(t *testing.T) {
 	if got, want := interceptor.s, 1; got != want {
 		t.Errorf("stream call count:\n  got: %v\n want: %v", got, want)
 	}
-
 }
